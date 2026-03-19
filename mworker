@@ -52,21 +52,89 @@ resolve_model() {
 
 # --- Commands ---
 
+cmd_configure() {
+  local profiles_file="$MWORKER_DIR/profiles"
+  if [ "${1:-}" = "--clear" ]; then
+    rm -f "$profiles_file"
+    echo "Profiles cleared."
+    return
+  fi
+  if [ $# -eq 0 ]; then
+    if [ -f "$profiles_file" ]; then
+      echo "Configured profiles:"
+      cat -n "$profiles_file"
+    else
+      echo "No profiles configured. Usage: mworker configure <profile1> <profile2> ..."
+    fi
+    return
+  fi
+  mkdir -p "$MWORKER_DIR"
+  printf '%s\n' "$@" > "$profiles_file"
+  echo "Saved $# profile(s):"
+  cat -n "$profiles_file"
+}
+
 cmd_start() {
-  local num="${1:-1}"
-  local model_name="${2:-opus}"
-  local prompt="${3:-check in and work for moltcorp!}"
-  local min_min="${4:-5}"
-  local max_min="${5:-10}"
+  local num=1
+  local model_name="opus"
+  local prompt="check in and work for moltcorp!"
+  local min_min=5
+  local max_min=10
+
+  # Parse flags and positional count
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --model|-m)    model_name="${2:?--model requires a value}"; shift 2 ;;
+      --prompt|-p)   prompt="${2:?--prompt requires a value}"; shift 2 ;;
+      --interval|-i)
+        local ival="${2:?--interval requires a value (e.g. 5-10)}"
+        min_min="${ival%%-*}"
+        max_min="${ival##*-}"
+        if ! [[ "$min_min" =~ ^[0-9]+$ ]] || ! [[ "$max_min" =~ ^[0-9]+$ ]]; then
+          echo "Error: --interval must be MIN-MAX (e.g. 5-10)" >&2; return 1
+        fi
+        if [ "$min_min" -gt "$max_min" ]; then
+          echo "Error: --interval min ($min_min) must be <= max ($max_min)" >&2; return 1
+        fi
+        shift 2 ;;
+      -*)
+        echo "Unknown flag: $1" >&2
+        echo "Usage: mworker start [count] [--model MODEL] [--prompt TEXT] [--interval MIN-MAX]" >&2
+        return 1 ;;
+      *)
+        if [[ "$1" =~ ^[0-9]+$ ]]; then
+          num="$1"
+        else
+          echo "Unknown argument: $1" >&2
+          echo "Usage: mworker start [count] [--model MODEL] [--prompt TEXT] [--interval MIN-MAX]" >&2
+          return 1
+        fi
+        shift ;;
+    esac
+  done
+
   local model_id
   model_id=$(resolve_model "$model_name")
 
+  # Read profiles if available
+  local profiles=()
+  if [ -f "$MWORKER_DIR/profiles" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] && profiles+=("$p")
+    done < "$MWORKER_DIR/profiles"
+  fi
+
   for i in $(seq 1 "$num"); do
     local agent_dir="$MWORKER_DIR/agent$i"
+    local profile="${profiles[$((i-1))]:-}"
     run_as "mkdir -p '$agent_dir'"
 
     if [ ! -f "$agent_dir/CLAUDE.md" ] && [ -n "$MWORKER_TEMPLATE" ] && [ -f "$MWORKER_TEMPLATE" ]; then
-      run_as "cp '$MWORKER_TEMPLATE' '$agent_dir/CLAUDE.md'"
+      if [ -n "$profile" ]; then
+        sed "s/YOUR_PROFILE_NAME_HERE/$profile/g" "$MWORKER_TEMPLATE" > "$agent_dir/CLAUDE.md"
+      else
+        run_as "cp '$MWORKER_TEMPLATE' '$agent_dir/CLAUDE.md'"
+      fi
     fi
 
     # Kill existing session if present
@@ -101,7 +169,7 @@ cmd_start() {
       if grep -q '"authentication_error"\|"authentication_failed"' "$logfile" 2>/dev/null; then
         echo "ERROR: agent$i failed to authenticate."
         echo "  Run 'claude' to log in or set ANTHROPIC_API_KEY, then restart:"
-        echo "  mworker kill all && mworker start $num $model_name"
+        echo "  mworker kill all && mworker start $num --model $model_name"
         return 1
       fi
     done
@@ -136,7 +204,23 @@ cmd_start() {
 }
 
 cmd_list() {
-  run_as "tmux ls" 2>/dev/null || echo "No agents running."
+  local sessions
+  sessions=$(run_as "tmux ls -F '#{session_name}'" 2>/dev/null) || {
+    echo "No agents running."
+    return
+  }
+  while IFS= read -r name; do
+    local profile=""
+    local claude_md="$MWORKER_DIR/$name/CLAUDE.md"
+    if [ -f "$claude_md" ]; then
+      profile=$(grep -oE 'PROFILE=[^ ]+' "$claude_md" 2>/dev/null | head -1 | cut -d= -f2) || true
+    fi
+    if [ -n "$profile" ] && [ "$profile" != "YOUR_PROFILE_NAME_HERE" ]; then
+      echo "$name  (profile: $profile)"
+    else
+      echo "$name  (no profile)"
+    fi
+  done <<< "$sessions"
 }
 
 cmd_watch() {
@@ -170,7 +254,7 @@ cmd_kill() {
 
 cmd_claim() {
   local found=0
-  for agentdir in "$MWORKER_DIR"/agent*/; do
+  for agentdir in "$MWORKER_DIR"/*/; do
     [ -d "$agentdir" ] || continue
     local name
     name=$(basename "$agentdir")
@@ -238,8 +322,9 @@ mworker — portable CLI to run and manage moltcorp agent workers
 Usage: mworker <command> [args]
 
 Commands:
-  start [n] [model] [prompt] [min] [max]   Start n agents (default: 1 opus, 5-10 min)
-  list                                      List running agents
+  configure [profiles...] [--clear]         Set up agent profiles
+  start [n] [options]                       Start n agents (default: 1)
+  list                                      List running agents (with profiles)
   log <agent>                               Show latest run log
   watch <agent>                             Tail log live (Ctrl+C to stop)
   kill <agent|all>                          Kill an agent or all agents
@@ -249,10 +334,20 @@ Commands:
   version                                   Show version
   help                                      Show this help
 
-Start examples:
-  mworker start                             1 opus agent, default prompt
-  mworker start 5 sonnet                    5 sonnet agents
-  mworker start 3 haiku "my prompt" 2 8     3 haiku agents, 2-8 min intervals
+Start options:
+  --model,    -m MODEL     Model to use (default: opus)
+  --prompt,   -p TEXT      Prompt for agents (default: "check in and work for moltcorp!")
+  --interval, -i MIN-MAX   Random sleep range in minutes between runs (default: 5-10)
+
+Examples:
+  mworker configure atlas nova spark        Save 3 profiles
+  mworker start                             1 opus agent, default settings
+  mworker start 5 -m sonnet                 5 sonnet agents
+  mworker start 3 -m haiku -i 2-8           3 haiku agents, 2-8 min intervals
+  mworker start 3 -p "do X at moltcorp"     3 opus agents with custom prompt
+
+When profiles are configured, agents are assigned profiles in order.
+Extra agents beyond the profile count start without a profile.
 
 Note: Prompt must mention "moltcorp" to trigger the skill.
 
@@ -265,6 +360,7 @@ EOF
 
 # --- Dispatch ---
 case "${1:-help}" in
+  configure) shift; cmd_configure "$@" ;;
   start)   shift; cmd_start "$@" ;;
   list|ls) cmd_list ;;
   watch)   shift; cmd_watch "$@" ;;
