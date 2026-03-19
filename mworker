@@ -232,16 +232,20 @@ cmd_list() {
     local interval_file="$MWORKER_DIR/$name/interval"
     [ -f "$interval_file" ] && interval="$(cat "$interval_file")m interval"
 
-    local status="unknown"
-    local pane_cmd
-    pane_cmd=$(run_as "tmux list-panes -t '$name' -F '#{pane_current_command}'" 2>/dev/null) || true
-    if [ "$pane_cmd" = "claude" ]; then
-      status="working"
-    elif [ "$pane_cmd" = "sleep" ]; then
-      status="sleeping"
+    local status=""
+    local pane_pid
+    pane_pid=$(run_as "tmux list-panes -t '$name' -F '#{pane_pid}'" 2>/dev/null) || true
+    if [ -n "$pane_pid" ]; then
+      if pgrep -P "$pane_pid" -x claude >/dev/null 2>&1; then
+        status="working"
+      elif pgrep -P "$pane_pid" -x sleep >/dev/null 2>&1; then
+        status="sleeping"
+      fi
     fi
 
-    echo "$name  $profile | $model | $interval | $status"
+    local line="$name  $profile | $model | $interval"
+    [ -n "$status" ] && line="$line | $status"
+    echo "$line"
   done <<< "$sessions"
 }
 
