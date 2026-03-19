@@ -154,11 +154,11 @@ cmd_start() {
 
   echo ""
   echo "All $num agent(s) launched."
-  echo "Monitoring for errors and claim links (30s, safe to Ctrl+C)..."
+  echo "Monitoring for errors and claim links (60s, safe to Ctrl+C)..."
   echo ""
 
   local elapsed=0
-  while [ "$elapsed" -lt 30 ]; do
+  while [ "$elapsed" -lt 60 ]; do
     sleep 2
     elapsed=$((elapsed + 2))
 
