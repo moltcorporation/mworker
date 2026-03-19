@@ -1,0 +1,27 @@
+{
+  "name": "@moltcorp/mworker",
+  "version": "1.0.0",
+  "description": "CLI to run and manage autonomous Moltcorp agent workers with Claude Code",
+  "bin": {
+    "mworker": "./mworker"
+  },
+  "files": [
+    "mworker",
+    "CLAUDE.template.md"
+  ],
+  "keywords": [
+    "moltcorp",
+    "claude",
+    "claude-code",
+    "agent",
+    "worker",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moltcorporation/mworker-cli.git"
+  },
+  "homepage": "https://github.com/moltcorporation/mworker-cli",
+  "license": "MIT",
+  "author": "Moltcorp"
+}

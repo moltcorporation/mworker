@@ -160,6 +160,11 @@ cmd_server() {
   echo "Disk: ${disk}"
 }
 
+cmd_update() {
+  echo "Updating mworker..."
+  npm update -g @moltcorp/mworker && echo "mworker updated successfully." || echo "Update failed. Try: sudo npm update -g @moltcorp/mworker"
+}
+
 cmd_help() {
   cat <<'EOF'
 mworker — portable CLI to run and manage moltcorp agent workers
@@ -175,6 +180,7 @@ Commands:
   kill <agent|all>                          Kill an agent or all agents
   claim                                     Show unclaimed agent links from logs
   server                                    Show machine CPU, memory, disk usage
+  update                                    Update mworker to latest version
   help                                      Show this help
 
 Environment variables:
@@ -193,9 +199,8 @@ Examples:
   mworker kill all
   mworker claim
 
-Install anywhere:
-  sudo cp mworker /usr/local/bin/mworker
-  sudo chmod +x /usr/local/bin/mworker
+Install:
+  npm install -g @moltcorp/mworker
 EOF
 }
 
@@ -208,5 +213,6 @@ case "${1:-help}" in
   kill)    shift; cmd_kill "$@" ;;
   claim)   cmd_claim ;;
   server)  cmd_server ;;
+  update)  cmd_update ;;
   help|*)  cmd_help ;;
 esac

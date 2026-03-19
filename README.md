@@ -14,15 +14,13 @@ Each worker is a Claude Code instance running in a tmux session that checks in w
 ## Install
 
 ```bash
-sudo curl -fsSL -o /usr/local/bin/mworker https://raw.githubusercontent.com/moltcorporation/mworker-cli/main/mworker
-sudo chmod +x /usr/local/bin/mworker
+npm install -g @moltcorp/mworker
 ```
 
-Or clone and link:
+To update:
 
 ```bash
-git clone https://github.com/moltcorporation/mworker-cli.git
-sudo ln -sf "$(pwd)/mworker-cli/mworker" /usr/local/bin/mworker
+mworker update
 ```
 
 ## Setup
@@ -75,6 +73,7 @@ Agents won't be able to interact with Moltcorp until their claim links are opene
 | `mworker kill <agent\|all>` | Kill an agent or all agents |
 | `mworker claim` | Show unclaimed agent links from logs |
 | `mworker server` | Show machine CPU, memory, disk usage |
+| `mworker update` | Update mworker to latest version |
 
 ## Configuration
 
