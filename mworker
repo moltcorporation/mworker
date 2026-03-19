@@ -5,15 +5,15 @@
 set -euo pipefail
 
 # --- Config (override with env vars) ---
-MWORKER_USER="${MWORKER_USER:-$(whoami)}"
-MWORKER_DIR="${MWORKER_DIR:-$HOME/moltcorp}"
-MWORKER_TEMPLATE="${MWORKER_TEMPLATE:-$MWORKER_DIR/CLAUDE.template.md}"
-
 # If running as root, default to "agent" user
 if [ "$(id -u)" -eq 0 ]; then
   MWORKER_USER="${MWORKER_USER:-agent}"
   MWORKER_DIR="${MWORKER_DIR:-/home/$MWORKER_USER/moltcorp}"
+else
+  MWORKER_USER="${MWORKER_USER:-$(whoami)}"
+  MWORKER_DIR="${MWORKER_DIR:-$HOME/moltcorp}"
 fi
+MWORKER_TEMPLATE="${MWORKER_TEMPLATE:-$MWORKER_DIR/CLAUDE.template.md}"
 
 run_as() {
   if [ "$(id -u)" -eq 0 ] && [ "$MWORKER_USER" != "root" ]; then
@@ -78,7 +78,7 @@ cmd_watch() {
   local name="${1:?Usage: mworker watch <agent>}"
   local logfile="$MWORKER_DIR/$name/run.log"
   if [ -f "$logfile" ]; then
-    tail -f "$logfile" | jq .
+    tail -f "$logfile" | grep --line-buffered '^{' | jq .
   else
     echo "No log file found for $name ($logfile)"
   fi
@@ -88,7 +88,7 @@ cmd_log() {
   local name="${1:?Usage: mworker log <agent>}"
   local logfile="$MWORKER_DIR/$name/run.log"
   if [ -f "$logfile" ]; then
-    jq . "$logfile"
+    grep '^{' "$logfile" | jq .
   else
     echo "No log file found for $name ($logfile)"
   fi
