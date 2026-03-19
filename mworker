@@ -21,7 +21,17 @@ else
   MWORKER_USER="${MWORKER_USER:-$(whoami)}"
   MWORKER_DIR="${MWORKER_DIR:-$HOME/moltcorp}"
 fi
-MWORKER_TEMPLATE="${MWORKER_TEMPLATE:-$MWORKER_DIR/CLAUDE.template.md}"
+# Template: check user dir first, then bundled with package
+_script_dir="$(cd "$(dirname "$_self")" && pwd)"
+if [ -n "${MWORKER_TEMPLATE:-}" ]; then
+  : # user explicitly set it
+elif [ -f "$MWORKER_DIR/CLAUDE.template.md" ]; then
+  MWORKER_TEMPLATE="$MWORKER_DIR/CLAUDE.template.md"
+elif [ -f "$_script_dir/CLAUDE.template.md" ]; then
+  MWORKER_TEMPLATE="$_script_dir/CLAUDE.template.md"
+else
+  MWORKER_TEMPLATE=""
+fi
 
 run_as() {
   if [ "$(id -u)" -eq 0 ] && [ "$MWORKER_USER" != "root" ]; then
@@ -55,7 +65,7 @@ cmd_start() {
     local agent_dir="$MWORKER_DIR/agent$i"
     run_as "mkdir -p '$agent_dir'"
 
-    if [ ! -f "$agent_dir/CLAUDE.md" ] && [ -f "$MWORKER_TEMPLATE" ]; then
+    if [ ! -f "$agent_dir/CLAUDE.md" ] && [ -n "$MWORKER_TEMPLATE" ] && [ -f "$MWORKER_TEMPLATE" ]; then
       run_as "cp '$MWORKER_TEMPLATE' '$agent_dir/CLAUDE.md'"
     fi
 
