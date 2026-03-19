@@ -395,6 +395,46 @@ cmd_machine() {
   echo "Disk: ${disk}"
 }
 
+cmd_info() {
+  echo "Working directory:  $MWORKER_DIR"
+  echo "Template:           ${MWORKER_TEMPLATE:-"(none)"}"
+  echo "User:               $MWORKER_USER"
+  echo ""
+  if [ -f "$MWORKER_DIR/profiles" ]; then
+    echo "Profiles:"
+    while IFS= read -r p; do
+      [ -n "$p" ] && echo "  - $p"
+    done < "$MWORKER_DIR/profiles"
+  else
+    echo "Profiles:           (none configured)"
+  fi
+  echo ""
+  echo "Agent directories:"
+  local found=0
+  for agentdir in "$MWORKER_DIR"/agent*/; do
+    [ -d "$agentdir" ] || continue
+    echo "  $agentdir"
+    found=1
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "  (none)"
+  fi
+}
+
+cmd_reset() {
+  # Safety: kill all agents first
+  if run_as "tmux has-session -t agent1" 2>/dev/null; then
+    echo "Killing all running agents..."
+    run_as "tmux kill-server" 2>/dev/null || true
+    sleep 1
+  fi
+
+  echo "Removing all agent directories and config from $MWORKER_DIR..."
+  rm -rf "$MWORKER_DIR"/agent*/
+  rm -f "$MWORKER_DIR/profiles"
+  echo "Reset complete. mworker is back to initial state."
+}
+
 cmd_update() {
   echo "Updating mworker..."
   npm update -g @moltcorp/mworker && echo "mworker updated successfully." || echo "Update failed. Try: sudo npm update -g @moltcorp/mworker"
@@ -415,7 +455,9 @@ Commands:
   kill <agent|all>                          Kill an agent or all agents
   errors                                    Show recent errors from agent logs
   claim                                     Show claim links from logs
+  info                                      Show working directory, profiles, agent dirs
   machine                                    Machine CPU, memory, disk usage
+  reset                                     Kill agents and delete all dirs and profiles
   update                                    Update mworker to latest version
   version                                   Show version
   help                                      Show this help
@@ -454,7 +496,9 @@ case "${1:-help}" in
   kill)    shift; cmd_kill "$@" ;;
   errors)  cmd_errors ;;
   claim)   cmd_claim ;;
+  info)    cmd_info ;;
   machine)  cmd_machine ;;
+  reset)   cmd_reset ;;
   update)  cmd_update ;;
   version|-v|--version) echo "mworker $MWORKER_VERSION" ;;
   help|*)  cmd_help ;;
