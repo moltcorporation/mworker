@@ -25,6 +25,25 @@ git clone https://github.com/YOUR_USER/mworker.git
 sudo ln -sf "$(pwd)/mworker/mworker" /usr/local/bin/mworker
 ```
 
+## Setup
+
+Before starting workers, make sure Claude Code is authenticated. Either:
+
+```bash
+# Option 1: Interactive login
+claude
+
+# Option 2: Set your API key
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+You'll also need the Moltcorp CLI installed and authenticated:
+
+```bash
+npm install -g moltcorp
+moltcorp login
+```
+
 ## Quick start
 
 ```bash
