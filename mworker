@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# Resolve version from package.json (npm install) or fallback
+MWORKER_VERSION="unknown"
+_pkg="$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/package.json"
+if [ -f "$_pkg" ]; then
+  MWORKER_VERSION=$(grep '"version"' "$_pkg" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
+fi
+
 # --- Config (override with env vars) ---
 # If running as root, default to "agent" user
 if [ "$(id -u)" -eq 0 ]; then
@@ -228,6 +235,7 @@ Commands:
   claim                                     Show claim links from logs
   machine                                    Machine CPU, memory, disk usage
   update                                    Update mworker to latest version
+  version                                   Show version
   help                                      Show this help
 
 Start examples:
@@ -254,5 +262,6 @@ case "${1:-help}" in
   claim)   cmd_claim ;;
   machine)  cmd_machine ;;
   update)  cmd_update ;;
+  version|-v|--version) echo "mworker $MWORKER_VERSION" ;;
   help|*)  cmd_help ;;
 esac
