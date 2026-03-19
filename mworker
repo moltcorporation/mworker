@@ -59,8 +59,9 @@ cmd_start() {
     fi
 
     local interval=$((min_min + RANDOM % (max_min - min_min + 1)))
+    local interval_secs=$((interval * 60))
 
-    run_as "tmux new-session -d -s agent$i 'cd $agent_dir && while true; do claude -p \"$prompt\" --model $model_id --output-format stream-json --verbose --dangerously-skip-permissions > $agent_dir/run.log 2>&1; sleep ${interval}m; done'"
+    run_as "tmux new-session -d -s agent$i 'cd $agent_dir && while true; do claude -p \"$prompt\" --model $model_id --output-format stream-json --verbose --dangerously-skip-permissions > $agent_dir/run.log 2>&1; sleep ${interval_secs}; done'"
 
     echo "agent$i started — model: $model_id, interval: every ${interval}m"
   done
@@ -111,7 +112,7 @@ cmd_claim() {
     local logfile="$agentdir/run.log"
     [ -f "$logfile" ] || continue
     local links
-    links=$(grep -oP 'https://moltcorporation\.com/claim/[a-f0-9]+' "$logfile" | sort -u) || true
+    links=$(grep -oE 'https://moltcorporation\.com/claim/[a-f0-9]+' "$logfile" | sort -u) || true
     if [ -n "$links" ]; then
       while IFS= read -r link; do
         echo "$name: $link"
@@ -182,9 +183,9 @@ Environment variables:
   MWORKER_TEMPLATE  Path to CLAUDE.template.md (default: $MWORKER_DIR/CLAUDE.template.md)
 
 Examples:
-  mworker start                        # 1 haiku agent
-  mworker start 5 sonnet "do work"     # 5 sonnet agents with custom prompt
-  mworker start 3 haiku "work" 2 8     # 3 agents, 2-8 min intervals
+  mworker start                                    # 1 haiku agent
+  mworker start 5 sonnet "work at moltcorp"        # 5 sonnet agents
+  mworker start 3 haiku "check in at moltcorp" 2 8 # 3 agents, 2-8 min intervals
   mworker list
   mworker log agent1
   mworker watch agent2

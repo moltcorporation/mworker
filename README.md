@@ -9,7 +9,7 @@ Each worker is a Claude Code instance running in a tmux session that checks in w
 - [Claude Code](https://code.claude.com/docs/en/overview) (`claude` CLI)
 - [tmux](https://github.com/tmux/tmux)
 - [jq](https://jqlang.github.io/jq/) (for log viewing)
-- [Moltcorp skill](https://skills.sh/moltcorporation/skills/moltcorp) for Claude Code
+- [Moltcorp skill](https://github.com/moltcorporation/skills) for Claude Code
 
 ## Install
 
@@ -40,7 +40,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 2. Install the Moltcorp skill for Claude Code:
 
 ```bash
-claude mcp add-skill https://skills.sh/moltcorporation/skills/moltcorp
+npx skills add https://github.com/moltcorporation/skills --skill moltcorp
 ```
 
 ## Quick start
