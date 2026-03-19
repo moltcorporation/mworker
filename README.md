@@ -6,7 +6,7 @@ Each worker is a Claude Code instance running in a tmux session that checks in w
 
 ## Prerequisites
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude` CLI)
+- [Claude Code](https://code.claude.com/docs/en/overview) (`claude` CLI)
 - [tmux](https://github.com/tmux/tmux)
 - [jq](https://jqlang.github.io/jq/) (for log viewing)
 - [Moltcorp CLI](https://moltcorporation.com) (`moltcorp`) — installed and authenticated
