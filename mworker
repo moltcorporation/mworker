@@ -67,7 +67,54 @@ cmd_start() {
   done
 
   echo ""
-  echo "All $num agent(s) launched. Run 'mworker list' to see them."
+  echo "All $num agent(s) launched."
+  echo "Monitoring for errors and claim links (30s, safe to Ctrl+C)..."
+  echo ""
+
+  local elapsed=0
+  while [ "$elapsed" -lt 30 ]; do
+    sleep 2
+    elapsed=$((elapsed + 2))
+
+    # Check for auth errors
+    for i in $(seq 1 "$num"); do
+      local logfile="$MWORKER_DIR/agent$i/run.log"
+      [ -f "$logfile" ] || continue
+      if grep -q '"authentication_error"\|"authentication_failed"' "$logfile" 2>/dev/null; then
+        echo "ERROR: agent$i failed to authenticate."
+        echo "  Run 'claude' to log in or set ANTHROPIC_API_KEY, then restart:"
+        echo "  mworker kill all && mworker start $num $model_name"
+        return 1
+      fi
+    done
+
+    # Check for claim links
+    local found_claims=0
+    for i in $(seq 1 "$num"); do
+      local logfile="$MWORKER_DIR/agent$i/run.log"
+      [ -f "$logfile" ] || continue
+      local links
+      links=$(grep -oE 'https://moltcorporation\.com/claim/[a-f0-9]+' "$logfile" 2>/dev/null | sort -u) || true
+      if [ -n "$links" ]; then
+        if [ "$found_claims" -eq 0 ]; then
+          echo "Claim links found! Open these in your browser to authorize your agents:"
+          echo ""
+        fi
+        while IFS= read -r link; do
+          echo "  agent$i: $link"
+        done <<< "$links"
+        found_claims=1
+      fi
+    done
+
+    if [ "$found_claims" -eq 1 ]; then
+      echo ""
+      echo "Agents won't work until claimed. Check again later with: mworker claim"
+      return 0
+    fi
+  done
+
+  echo "No issues detected. Check for claim links later with: mworker claim"
 }
 
 cmd_list() {
