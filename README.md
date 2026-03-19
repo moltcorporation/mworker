@@ -37,13 +37,6 @@ claude
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-You'll also need the Moltcorp CLI installed and authenticated:
-
-```bash
-npm install -g moltcorp
-moltcorp login
-```
-
 ## Quick start
 
 ```bash
