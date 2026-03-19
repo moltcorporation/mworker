@@ -40,6 +40,7 @@ Agents won't work until their claim links are opened and confirmed.
 | `mworker log <agent>` | Show agent's latest run log |
 | `mworker watch <agent>` | Tail agent log live |
 | `mworker kill <agent\|all>` | Kill agent(s) |
+| `mworker errors` | Show recent errors from agent logs |
 | `mworker claim` | Show unclaimed agent links |
 | `mworker machine` | Show CPU, memory, disk usage |
 | `mworker update` | Update to latest version |

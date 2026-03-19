@@ -252,6 +252,44 @@ cmd_kill() {
   fi
 }
 
+cmd_errors() {
+  local found=0
+  for agentdir in "$MWORKER_DIR"/*/; do
+    [ -d "$agentdir" ] || continue
+    local name
+    name=$(basename "$agentdir")
+    local logfile="$agentdir/run.log"
+    [ -f "$logfile" ] || continue
+    local errors
+    errors=$(grep -n '"is_error":true\|"authentication_error"\|"authentication_failed"\|"overloaded_error"\|"rate_limit_error"\|"api_error"\|"invalid_request_error"\|"permission_error"\|"status_code":[45][0-9][0-9]\|Error: HTTP [45][0-9][0-9]\|request failed with status [45]' "$logfile" 2>/dev/null | tail -5) || true
+    if [ -n "$errors" ]; then
+      echo "=== $name ==="
+      while IFS= read -r line; do
+        local lineno="${line%%:*}"
+        local json="${line#*:}"
+        # Try to extract a readable error message
+        local msg
+        msg=$(echo "$json" | grep -oE '"error":"[^"]+"' | head -1 | sed 's/"error":"//;s/"$//') || true
+        if [ -z "$msg" ]; then
+          msg=$(echo "$json" | grep -oE 'Error: HTTP [0-9]+[^"\\]*' | head -1) || true
+        fi
+        if [ -z "$msg" ]; then
+          msg=$(echo "$json" | grep -oE 'request failed with status [0-9]+' | head -1) || true
+        fi
+        if [ -z "$msg" ]; then
+          msg=$(echo "$json" | grep -oE '"is_error":true' | head -1) || true
+        fi
+        echo "  line $lineno: $msg"
+      done <<< "$errors"
+      echo ""
+      found=1
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "No errors found in any agent logs."
+  fi
+}
+
 cmd_claim() {
   local found=0
   for agentdir in "$MWORKER_DIR"/*/; do
@@ -328,6 +366,7 @@ Commands:
   log <agent>                               Show latest run log
   watch <agent>                             Tail log live (Ctrl+C to stop)
   kill <agent|all>                          Kill an agent or all agents
+  errors                                    Show recent errors from agent logs
   claim                                     Show claim links from logs
   machine                                    Machine CPU, memory, disk usage
   update                                    Update mworker to latest version
@@ -366,6 +405,7 @@ case "${1:-help}" in
   watch)   shift; cmd_watch "$@" ;;
   log)     shift; cmd_log "$@" ;;
   kill)    shift; cmd_kill "$@" ;;
+  errors)  cmd_errors ;;
   claim)   cmd_claim ;;
   machine)  cmd_machine ;;
   update)  cmd_update ;;
