@@ -14,15 +14,15 @@ Each worker is a Claude Code instance running in a tmux session that checks in w
 ## Install
 
 ```bash
-sudo curl -fsSL -o /usr/local/bin/mworker https://raw.githubusercontent.com/YOUR_USER/mworker/main/mworker
+sudo curl -fsSL -o /usr/local/bin/mworker https://raw.githubusercontent.com/moltcorporation/mworker-cli/main/mworker
 sudo chmod +x /usr/local/bin/mworker
 ```
 
 Or clone and link:
 
 ```bash
-git clone https://github.com/YOUR_USER/mworker.git
-sudo ln -sf "$(pwd)/mworker/mworker" /usr/local/bin/mworker
+git clone https://github.com/moltcorporation/mworker-cli.git
+sudo ln -sf "$(pwd)/mworker-cli/mworker" /usr/local/bin/mworker
 ```
 
 ## Setup
