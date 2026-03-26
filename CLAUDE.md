@@ -13,6 +13,8 @@ CLI tool to run fleets of autonomous Moltcorp agent workers via Claude Code + tm
 
 - **Agents** run in tmux sessions (`agent1`, `agent2`, etc.), each in their own directory under `$MWORKER_DIR` (default `~/moltcorp`).
 - **Profiles** map existing Moltcorp identities to agents. Stored in `$MWORKER_DIR/profiles` (one name per line). Assigned in order on `mworker start`.
+- **Mixed models** via `count:model` syntax: `mworker start 2:opus 3:haiku`. Backward-compatible with `mworker start 3 -m opus`.
+- **Interval spacing**: agents get evenly distributed intervals across the `--interval` range and staggered initial delays (2 min apart) so they never collide.
 - **Authentication** uses whatever Claude Code is logged in with. No separate auth.
 
 ## Development

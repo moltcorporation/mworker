@@ -75,16 +75,18 @@ cmd_configure() {
 }
 
 cmd_start() {
-  local num=1
+  local num=0
   local model_name="opus"
+  local model_flag_set=0
   local prompt="check in and work for moltcorp!"
   local min_min=5
   local max_min=10
+  local fleet_specs=()
 
-  # Parse flags and positional count
+  # Parse flags and positional args
   while [ $# -gt 0 ]; do
     case "$1" in
-      --model|-m)    model_name="${2:?--model requires a value}"; shift 2 ;;
+      --model|-m)    model_name="${2:?--model requires a value}"; model_flag_set=1; shift 2 ;;
       --prompt|-p)   prompt="${2:?--prompt requires a value}"; shift 2 ;;
       --interval|-i)
         local ival="${2:?--interval requires a value (e.g. 5-10)}"
@@ -99,22 +101,50 @@ cmd_start() {
         shift 2 ;;
       -*)
         echo "Unknown flag: $1" >&2
-        echo "Usage: mworker start [count] [--model MODEL] [--prompt TEXT] [--interval MIN-MAX]" >&2
+        echo "Usage: mworker start [count:model ...] [--prompt TEXT] [--interval MIN-MAX]" >&2
         return 1 ;;
       *)
-        if [[ "$1" =~ ^[0-9]+$ ]]; then
+        if [[ "$1" =~ ^[0-9]+:[a-zA-Z0-9._-]+$ ]]; then
+          fleet_specs+=("$1")
+        elif [[ "$1" =~ ^[0-9]+$ ]]; then
           num="$1"
         else
           echo "Unknown argument: $1" >&2
-          echo "Usage: mworker start [count] [--model MODEL] [--prompt TEXT] [--interval MIN-MAX]" >&2
+          echo "Usage: mworker start [count:model ...] [--prompt TEXT] [--interval MIN-MAX]" >&2
           return 1
         fi
         shift ;;
     esac
   done
 
-  local model_id
-  model_id=$(resolve_model "$model_name")
+  # Build agent_models array — one entry per agent
+  local agent_models=()
+  if [ ${#fleet_specs[@]} -gt 0 ]; then
+    # Mixed model mode: count:model pairs
+    if [ "$model_flag_set" -eq 1 ]; then
+      echo "Error: --model cannot be used with count:model specs" >&2; return 1
+    fi
+    if [ "$num" -gt 0 ]; then
+      echo "Error: plain count cannot be mixed with count:model specs" >&2; return 1
+    fi
+    for spec in "${fleet_specs[@]}"; do
+      local count="${spec%%:*}"
+      local mname="${spec##*:}"
+      if [ "$count" -lt 1 ]; then
+        echo "Error: count must be >= 1 in '$spec'" >&2; return 1
+      fi
+      for j in $(seq 1 "$count"); do
+        agent_models+=("$mname")
+      done
+    done
+    num=${#agent_models[@]}
+  else
+    # Single model mode (backward compat)
+    [ "$num" -eq 0 ] && num=1
+    for j in $(seq 1 "$num"); do
+      agent_models+=("$model_name")
+    done
+  fi
 
   # Read profiles if available
   local profiles=()
@@ -138,9 +168,17 @@ cmd_start() {
     done
   fi
 
+  # Compute evenly spaced intervals and staggered start delays
+  local spacing=2  # minutes between agent starts
+  local range=$((max_min - min_min))
+
   for i in $(seq 1 "$num"); do
     local agent_dir="$MWORKER_DIR/agent$i"
     local profile="${profiles[$((i-1))]:-}"
+    local this_model="${agent_models[$((i-1))]}"
+    local this_model_id
+    this_model_id=$(resolve_model "$this_model")
+
     run_as "mkdir -p '$agent_dir'"
 
     if [ ! -f "$agent_dir/CLAUDE.md" ] && [ -n "$MWORKER_TEMPLATE" ] && [ -f "$MWORKER_TEMPLATE" ]; then
@@ -165,19 +203,32 @@ cmd_start() {
       sleep 1
     fi
 
-    local interval=$((min_min + RANDOM % (max_min - min_min + 1)))
+    # Evenly distribute intervals across the range
+    local interval
+    if [ "$num" -eq 1 ]; then
+      interval=$(( (min_min + max_min) / 2 ))
+    else
+      interval=$(( min_min + (i - 1) * range / (num - 1) ))
+    fi
     local interval_secs=$((interval * 60))
 
+    # Stagger initial starts so no two agents begin within 2 min of each other
+    local initial_delay=$(( (i - 1) * spacing * 60 ))
+
     echo "$interval" > "$agent_dir/interval"
-    echo "$model_name" > "$agent_dir/model"
+    echo "$this_model" > "$agent_dir/model"
 
-    run_as "tmux new-session -d -s agent$i 'cd $agent_dir && while true; do claude -p \"$prompt\" --model $model_id --output-format stream-json --verbose --dangerously-skip-permissions > $agent_dir/run.log 2>&1; sleep ${interval_secs}; done'"
+    run_as "tmux new-session -d -s agent$i 'sleep ${initial_delay} && cd $agent_dir && while true; do claude -p \"$prompt\" --model $this_model_id --output-format stream-json --verbose --dangerously-skip-permissions > $agent_dir/run.log 2>&1; sleep ${interval_secs}; done'"
 
-    echo "agent$i started — model: $model_id, interval: every ${interval}m"
+    local delay_note=""
+    if [ "$initial_delay" -gt 0 ]; then
+      delay_note=", starts in $((initial_delay / 60))m"
+    fi
+    echo "agent$i — $this_model_id, every ${interval}m${delay_note}"
   done
 
   echo ""
-  echo "All $num agent(s) launched."
+  echo "All $num agent(s) launched. Agents are staggered ${spacing}m apart."
   echo "Monitoring for errors and claim links (60s, safe to Ctrl+C)..."
   echo ""
 
@@ -186,14 +237,16 @@ cmd_start() {
     sleep 2
     elapsed=$((elapsed + 2))
 
-    # Check for auth errors
+    # Check for auth errors (only agents whose initial delay has elapsed)
     for i in $(seq 1 "$num"); do
+      local agent_delay=$(( (i - 1) * spacing * 60 ))
+      [ "$elapsed" -lt "$agent_delay" ] && continue
       local logfile="$MWORKER_DIR/agent$i/run.log"
       [ -f "$logfile" ] || continue
       if grep -q '"authentication_error"\|"authentication_failed"' "$logfile" 2>/dev/null; then
         echo "ERROR: agent$i failed to authenticate."
         echo "  Run 'claude' to log in or set ANTHROPIC_API_KEY, then restart:"
-        echo "  mworker kill all && mworker start $num --model $model_name"
+        echo "  mworker kill all && mworker start ..."
         return 1
       fi
     done
@@ -448,7 +501,7 @@ Usage: mworker <command> [args]
 
 Commands:
   configure [profiles...] [--clear]         Set up agent profiles
-  start [n] [options]                       Start n agents (default: 1)
+  start [count:model ...] [options]         Start agents (default: 1 opus)
   list                                      List agents (profile, model, interval, status)
   log <agent>                               Show latest run log
   watch <agent>                             Tail log live (Ctrl+C to stop)
@@ -463,15 +516,23 @@ Commands:
   help                                      Show this help
 
 Start options:
-  --model,    -m MODEL     Model to use (default: opus)
+  --model,    -m MODEL     Model for all agents (default: opus)
   --prompt,   -p TEXT      Prompt for agents (default: "check in and work for moltcorp!")
-  --interval, -i MIN-MAX   Random sleep range in minutes between runs (default: 5-10)
+  --interval, -i MIN-MAX   Sleep range in minutes between runs (default: 5-10)
+
+  Agents are staggered 2 min apart and given evenly spaced intervals
+  across the range so they never collide.
+
+  For mixed models, use count:model pairs instead of a plain count:
+    mworker start 2:opus 3:haiku       2 opus + 3 haiku = 5 agents
+    mworker start 1:opus 2:sonnet      mixed fleet of 3
 
 Examples:
   mworker configure atlas nova spark        Save 3 profiles
   mworker start                             1 opus agent, default settings
   mworker start 5 -m sonnet                 5 sonnet agents
-  mworker start 3 -m haiku -i 2-8           3 haiku agents, 2-8 min intervals
+  mworker start 2:opus 3:haiku              mixed fleet of 5
+  mworker start 3 -i 4-12                   3 opus agents, spaced across 4-12 min
   mworker start 3 -p "do X at moltcorp"     3 opus agents with custom prompt
 
 When profiles are configured, agents are assigned profiles in order.
